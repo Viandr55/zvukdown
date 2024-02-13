@@ -14,7 +14,7 @@ class zvukdown_:
     def __init__(self):
         self.verify = True
         self.headers = []
-        # self.token = self.read_token()
+        self.token = self.read_token()
         pass
 
     def read_token(self):
@@ -27,27 +27,6 @@ class zvukdown_:
                 self.headers = {"x-auth-token": token}
         else:
             print('Нет файла token.txt')
-
-    def save_token(self, login, password):
-        url = "https://zvuk.com/api/tiny/login/email"
-        params = {
-            "register": "true"
-        }
-        data = {
-            "email": login,
-            "password": password,
-        }
-        r = requests.post(url, params=params, data=data, verify=self.verify)
-        r.raise_for_status()
-        resp = r.json(strict=False)
-        if "result" in resp:
-            if "token" in resp["result"]:
-                with open("token.txt", "w", encoding="utf8") as f:
-                    token = resp["result"]["token"]
-                    f.write(token)
-                    if len(token) != 32:
-                        raise Exception("Wrong token length")
-                    self.headers = {"x-auth-token": token}
 
     @staticmethod
     def __ntfs(filename):
@@ -88,17 +67,17 @@ class zvukdown_:
 
     def __get_copyright(self, label_ids):
         label_ids = self.__to_str(label_ids)
-        url = f"https://zvuk.com/api/tiny/labels"
+        url = "https://zvuk.com/api/tiny/labels"
         params = {
             "ids": label_ids
         }
-        r = requests.get(url, params=params, verify=self.verify)
+        r = requests.get(url, params=params, headers=self.headers, verify=self.verify)
         r.raise_for_status()
         resp = r.json(strict=False)
 
         info = {}
         for i in resp['result']['labels'].values():
-            info[i["id"]] = i['title']
+            info[i["id"]] = i["title"]
         return (info)
 
     def __get_tracks_metadata(self, track_ids):
@@ -120,7 +99,6 @@ class zvukdown_:
                 release_id = s['release_id']
                 track_id = s['id']
                 if s['genres']:
-                    # genre = s['genres'][0]
                     genre = ", ".join(s['genres'])
                 else:
                     genre = ""
@@ -151,8 +129,6 @@ class zvukdown_:
             }
             r = requests.get(url, params=params,
                              headers=self.headers, verify=self.verify)
-            # r.raise_for_status()
-            # print(r.raise_for_status())
             resp = r.json(strict=False)
             links[i] = resp['result']['stream']
             if links[i] != 0:
@@ -163,7 +139,6 @@ class zvukdown_:
 
     def __get_releases_info(self, release_ids: object) -> object:
         release_ids = self.__to_str(release_ids)
-
         info = {}
         url = "https://zvuk.com/api/tiny/releases"
         params = {
@@ -179,12 +154,10 @@ class zvukdown_:
             labels.add(i["label_id"])
         labels_info = self.__get_copyright(labels)
 
-        # print(resp)
+
         for a in resp['result']["releases"].values():
-            info[a["id"]] = {"track_ids": a["track_ids"], "tracktotal": len(a["track_ids"]),
-                             "copyright": labels_info[a['label_id']], "date": a["date"], "album": a["title"],
-                             "author": a["credits"]}
-        # print(info)
+            info[a["id"]] = {"track_ids": a["track_ids"], "tracktotal": len(a["track_ids"]), "copyright": labels_info[a['label_id']],
+                              "date": a["date"], "album": a["title"], "author": a["credits"]}
         return info
 
     def __download_image(self, release_id, image_link):
@@ -205,7 +178,6 @@ class zvukdown_:
         copyfile(pic, comp_pic)
         # pingo optimize, compress
         return {"original": pic, "compressed": comp_pic}
-        # return {"original": pic}
 
     def __save_track(self, url, metadata, releases, single):
         pic = self.__download_image(metadata["release_id"], metadata["image"])
@@ -215,12 +187,6 @@ class zvukdown_:
             if not os.path.exists(folder):
                 os.makedirs(folder)
                 copyfile(pic["original"], os.path.join(folder, "cover.jpg"))
-            # else:
-            #    print("Folder already exist, continue?")
-            #    a = input()
-            #    if not a:
-            #        os._exit()
-            # os.chdir(folder)
             pic = pic["compressed"]
             filename = f'{metadata["number"]:02d} - {metadata["name"]}.flac'
         else:
@@ -289,17 +255,10 @@ class zvukdown_:
     def download_albums(self, release_ids):
         track_ids = []
         releases: dict[Any, dict[str, int | Any]] = self.__get_releases_info(release_ids)
-        #print(releases)
         print(" ")
         print("Информация о релизе: \n")
         from pprint import pprint
         pprint(releases)
-        #for key, value in releases.items():
-        #    if key := track_ids:
-        #        print(" ")
-        #    else:
-        #        print("{0}: {1}".format(key, value) + "\n")
-        # os.system("pause")
         for i in releases.values():
             track_ids += i["track_ids"]
         self.download_tracks(track_ids, releases=releases)
@@ -311,23 +270,15 @@ if __name__ == '__main__':
     track_ids = []
     z = zvukdown_()
 
-    if "login" in sys.argv:
-        # print(sys.argv[2], sys.argv[3])
-        z.save_token(sys.argv[2], sys.argv[3])
-        print("Token saved!")
-    else:
-        if "debug" in sys.argv:
-            z.verify = False
-        for i in sys.argv:
-            # print(i)
-            if "release" in i:
-                release_ids.append(int(i.strip("https://sber-zvuk.com/release/")))
-            elif "track" in i:
-                track_ids.append(int(i.strip("https://sber-zvuk.com/track/")))
+    for i in sys.argv:
+        if "release" in i:
+            release_ids.append(int(i.strip("https://sber-zvuk.com/release/")))
+        elif "track" in i:
+            track_ids.append(int(i.strip("https://sber-zvuk.com/track/")))
 
-        z.read_token()
-        if release_ids:
-            z.download_albums(release_ids)
-        if track_ids:
-            z.download_tracks(track_ids, True)
-        list(map(os.remove, glob.glob("temp*.jpg")))
+    z.read_token()
+    if release_ids:
+        z.download_albums(release_ids)
+    if track_ids:
+        z.download_tracks(track_ids, True)
+    list(map(os.remove, glob.glob("temp*.jpg")))
