@@ -176,7 +176,6 @@ class zvukdown_:
             # else:
             # copyfile(pic, comp_pic)
         copyfile(pic, comp_pic)
-        # pingo optimize, compress
         return {"original": pic, "compressed": comp_pic}
 
     def __save_track(self, url, metadata, releases, single):
